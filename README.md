@@ -100,7 +100,27 @@ Default Postgres credentials:
 - Password: postgres
 - Database: qao_inmate
 
-Create the database and run migrations (when you add them) before first API startup.
+### Migrations (Alembic)
+
+```bash
+cd services/api
+# With DB running (e.g. docker compose up -d postgres)
+alembic upgrade head
+```
+
+### Seed (demo data)
+
+```bash
+cd services/api
+alembic upgrade head   # run migrations first
+python -m scripts.seed
+```
+
+Creates: 1 attorney, 1 paralegal, 1 inmate, 1 demo case shared to all.
+
+- attorney@demo.local / demo123
+- paralegal@demo.local / demo123
+- inmate@demo.local / demo123
 
 ## MinIO (Object Storage)
 
