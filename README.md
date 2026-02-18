@@ -116,6 +116,14 @@ Run the apps locally with your own Postgres/MinIO. Set `DB_URL` in `services/api
 
 Demo accounts: attorney@demo.local, paralegal@demo.local, inmate@demo.local (all: demo123)
 
+## Documents
+
+- **Upload:** `POST /api/v1/cases/{case_id}/docs` (multipart: file, query: inmate_visible)
+- **List:** `GET /api/v1/cases/{case_id}/docs?q=` (full-text search via ts_rank)
+- **Stream:** `GET /api/v1/files/{doc_id}/stream` (requires case share; inmates need inmate_visible)
+
+Files stored in MinIO. PDF text extracted for search. Audit logs for upload/view/download.
+
 ## Database
 
 - Host: localhost (or `postgres` in Docker)

@@ -24,6 +24,7 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     file_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    inmate_visible: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
