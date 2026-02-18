@@ -3,19 +3,14 @@
 import asyncio
 import uuid
 
-import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import hash_password
 from app.db.session import async_session
 from app.models.case import Case
 from app.models.share import Share
 from app.models.user import User
-
-
-def hash_password(password: str) -> str:
-    """Hash password with bcrypt."""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 async def create_user(
