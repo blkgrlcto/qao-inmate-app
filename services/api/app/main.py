@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import router
 from app.api.auth import router as auth_router
-from app.api.documents import cases_router, files_router
+from app.api.documents import cases_router, docs_router, files_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cases_router, prefix="/api/v1")
+app.include_router(docs_router, prefix="/api/v1")
 app.include_router(files_router, prefix="/api/v1")
 
 

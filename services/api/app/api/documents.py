@@ -3,7 +3,7 @@ import io
 import uuid
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,8 +18,9 @@ from app.db.session import get_db
 from app.services.pdf import extract_text_from_pdf
 from app.services.s3 import get_object_stream, upload_file
 
-cases_router = APIRouter(prefix="/cases", tags=["documents"])
+cases_router = APIRouter(prefix="/cases", tags=["cases", "documents"])
 files_router = APIRouter(prefix="/files", tags=["files"])
+docs_router = APIRouter(prefix="/docs", tags=["documents"])
 
 
 async def _user_has_case_access(
@@ -43,6 +44,47 @@ async def _can_access_document(
     if role == "inmate" and not doc.inmate_visible:
         return False
     return True
+
+
+@cases_router.get("")
+async def list_cases(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List cases shared with the current user."""
+    result = await db.execute(
+        select(Case)
+        .join(Share, Share.case_id == Case.id)
+        .where(Share.user_id == current_user.id)
+        .order_by(Case.updated_at.desc())
+    )
+    cases = result.scalars().all()
+    return [
+        {"id": str(c.id), "title": c.title, "description": c.description, "status": c.status, "updated_at": c.updated_at.isoformat()}
+        for c in cases
+    ]
+
+
+@cases_router.get("/{case_id}")
+async def get_case(
+    case_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get case detail. Requires share access."""
+    if not await _user_has_case_access(db, current_user.id, case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    result = await db.execute(select(Case).where(Case.id == case_id))
+    case = result.scalar_one_or_none()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return {
+        "id": str(case.id),
+        "title": case.title,
+        "description": case.description,
+        "status": case.status,
+        "updated_at": case.updated_at.isoformat(),
+    }
 
 
 @cases_router.post("/{case_id}/docs")
@@ -146,6 +188,49 @@ async def list_case_documents(
             for r in rows
         ]
     return []
+
+
+@docs_router.get("/inmate")
+async def list_inmate_documents(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List all inmate-visible docs across cases shared with user (for inmate home)."""
+    role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
+    if role != "inmate":
+        raise HTTPException(status_code=403, detail="For inmates only")
+    result = await db.execute(
+        select(Document, Case.title)
+        .join(Case, Case.id == Document.case_id)
+        .join(Share, Share.case_id == Document.case_id)
+        .where(Share.user_id == current_user.id, Document.inmate_visible == True)
+        .order_by(Document.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        {"id": str(r[0].id), "title": r[0].title, "case_title": r[1], "case_id": str(r[0].case_id)}
+        for r in rows
+    ]
+
+
+@files_router.patch("/{doc_id}")
+async def update_document(
+    doc_id: uuid.UUID,
+    inmate_visible: Optional[bool] = Body(None),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Update document (e.g. toggle inmate_visible). Requires case share."""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not await _user_has_case_access(db, current_user.id, doc.case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if inmate_visible is not None:
+        doc.inmate_visible = inmate_visible
+    await db.flush()
+    return {"id": str(doc.id), "inmate_visible": doc.inmate_visible}
 
 
 @files_router.get("/{doc_id}/stream")

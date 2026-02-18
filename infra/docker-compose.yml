@@ -68,7 +68,6 @@ services:
       - "3000:3000"
     depends_on:
       - api
-    command: npm run start
 
 volumes:
   postgres_data:
