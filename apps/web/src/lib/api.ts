@@ -123,6 +123,37 @@ export type SimilarResult = {
   };
 };
 
+export type FederalCaseResult = {
+  id: string;
+  external_docket_id: number;
+  case_name: string | null;
+  docket_number: string | null;
+  court_id: string | null;
+  date_filed: string | null;
+  recap_available: boolean;
+  absolute_url: string | null;
+  detected_mode: string;
+};
+
+export async function searchFederalCases(
+  token: string,
+  params: { q: string; court_id?: string; limit?: number; cursor?: string }
+) {
+  const url = new URL(`${API_BASE}/federal-cases/search`);
+  url.searchParams.set("q", params.q);
+  if (params.court_id) url.searchParams.set("court_id", params.court_id);
+  if (params.limit) url.searchParams.set("limit", String(params.limit));
+  if (params.cursor) url.searchParams.set("cursor", params.cursor);
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Search failed");
+  }
+  return res.json();
+}
+
 export async function searchSimilar(
   token: string,
   params: { q: string; jurisdiction?: string; disposition?: string[]; limit?: number }

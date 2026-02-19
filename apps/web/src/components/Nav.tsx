@@ -17,12 +17,20 @@ export function Nav() {
             Home
           </Link>
           {isStaff ? (
-            <Link
-              href="/cases"
-              className="font-medium text-gray-600 hover:text-blue-600"
-            >
-              Cases
-            </Link>
+            <>
+              <Link
+                href="/cases"
+                className="font-medium text-gray-600 hover:text-blue-600"
+              >
+                Cases
+              </Link>
+              <Link
+                href="/cases/federal"
+                className="font-medium text-gray-600 hover:text-blue-600"
+              >
+                Federal Search
+              </Link>
+            </>
           ) : (
             <Link
               href="/inmate"

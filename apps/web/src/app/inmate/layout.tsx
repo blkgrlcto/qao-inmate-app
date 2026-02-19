@@ -9,6 +9,7 @@ const DOCS_READER_PATTERN = /^\/inmate\/documents\/[^/]+$/;
 const tabs = [
   { href: "/inmate", label: "My Case", icon: "📋" },
   { href: "/inmate/documents", label: "Documents", icon: "📄" },
+  { href: "/inmate/federal", label: "Federal Search", icon: "⚖️" },
   { href: "/inmate/similar", label: "Similar Cases", icon: "🔍" },
   { href: "/inmate/help", label: "Help", icon: "❓" },
 ] as const;

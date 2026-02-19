@@ -3,8 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import router
+from app.api.admin import admin_router
 from app.api.auth import router as auth_router
 from app.api.documents import cases_router, docs_router, files_router
+from app.api.federal_cases import router as federal_cases_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -26,6 +28,8 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cases_router, prefix="/api/v1")
 app.include_router(docs_router, prefix="/api/v1")
 app.include_router(files_router, prefix="/api/v1")
+app.include_router(federal_cases_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get("/health")

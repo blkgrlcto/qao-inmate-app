@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    # CourtListener (Free Law Project)
+    COURTLISTENER_BASE_URL: str = "https://www.courtlistener.com"
+    COURTLISTENER_API_TOKEN: Optional[str] = None
+    FED_CASE_CACHE_TTL_DAYS: int = 30
+    FED_CASE_SYNC_STALE_DAYS: int = 7
+    COURTLISTENER_RATE_LIMIT_RPS: float = 2.0
+
 
 @lru_cache
 def get_settings() -> Settings:
