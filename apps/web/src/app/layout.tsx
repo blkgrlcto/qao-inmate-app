@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AuthProvider } from "@/context/auth";
-import { Nav } from "@/components/Nav";
+import { ConditionalNav } from "@/components/ConditionalNav";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -31,7 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <Nav />
+          <ConditionalNav />
           {children}
         </AuthProvider>
       </body>
