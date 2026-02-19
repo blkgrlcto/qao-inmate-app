@@ -105,3 +105,37 @@ export async function listInmateDocs(token: string) {
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
 }
+
+export type SimilarResult = {
+  id: string;
+  citation: string;
+  title: string;
+  jurisdiction: string;
+  date: string;
+  disposition: string;
+  score: number;
+  headline?: string;
+  pull_quotes?: string[];
+  source_url?: string;
+  why?: {
+    keyword_matches?: string[];
+    similarity_bucket?: "High" | "Medium" | "Low";
+  };
+};
+
+export async function searchSimilar(
+  token: string,
+  params: { q: string; jurisdiction?: string; disposition?: string[]; limit?: number }
+) {
+  const url = new URL(`${API_BASE}/similar`);
+  url.searchParams.set("q", params.q);
+  if (params.jurisdiction) url.searchParams.set("jurisdiction", params.jurisdiction);
+  if (params.disposition?.length)
+    params.disposition.forEach((d) => url.searchParams.append("disposition", d));
+  if (params.limit) url.searchParams.set("limit", String(params.limit));
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Search failed");
+  return res.json();
+}
