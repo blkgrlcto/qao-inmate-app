@@ -16,25 +16,25 @@ type Doc = {
 };
 
 export default function InmateMyCasePage() {
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastSync, setLastSync] = useState<Date | null>(null);
 
   const load = useCallback(() => {
-    if (!token || (user && user.role !== "inmate")) return;
+    if (!user || user.role !== "inmate") return;
     setLoading(true);
     setError("");
     api
-      .listInmateDocs(token)
+      .listInmateDocs()
       .then((data) => {
         setDocs(data);
         setLastSync(new Date());
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, [token, user]);
+  }, [user]);
 
   useEffect(() => {
     load();

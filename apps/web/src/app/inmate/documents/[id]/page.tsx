@@ -17,7 +17,7 @@ export default function InmateDocumentReaderPage() {
   const params = useParams();
   const router = useRouter();
   const docId = params.id as string;
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [doc, setDoc] = useState<Doc | null>(null);
   const [loading, setLoading] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
@@ -29,15 +29,15 @@ export default function InmateDocumentReaderPage() {
   }, [docId]);
 
   const loadDoc = useCallback(() => {
-    if (!token) return;
+    if (!user) return;
     api
-      .listInmateDocs(token)
+      .listInmateDocs()
       .then((list: Doc[]) => {
         const found = list.find((d: Doc) => d.id === docId);
         setDoc(found || null);
       })
       .finally(() => setLoading(false));
-  }, [token, docId]);
+  }, [user, docId]);
 
   useEffect(() => {
     loadDoc();

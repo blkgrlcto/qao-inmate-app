@@ -24,7 +24,7 @@ type CaseDetail = {
 export default function CaseDetailPage() {
   const params = useParams();
   const caseId = params.id as string;
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [search, setSearch] = useState("");
@@ -33,33 +33,33 @@ export default function CaseDetailPage() {
   const [error, setError] = useState("");
 
   const loadCase = useCallback(() => {
-    if (!token) return;
-    api.getCase(token, caseId).then(setCaseData).catch(setError);
-  }, [token, caseId]);
+    if (!user) return;
+    api.getCase(caseId).then(setCaseData).catch(setError);
+  }, [user, caseId]);
 
   const loadDocs = useCallback(() => {
-    if (!token) return;
+    if (!user) return;
     api
-      .listCaseDocs(token, caseId, search || undefined)
+      .listCaseDocs(caseId, search || undefined)
       .then(setDocs)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed"))
       .finally(() => setLoading(false));
-  }, [token, caseId, search]);
+  }, [user, caseId, search]);
 
   useEffect(() => {
-    if (!token || !caseId) return;
+    if (!user || !caseId) return;
     setLoading(true);
     loadCase();
     loadDocs();
-  }, [token, caseId, loadCase, loadDocs]);
+  }, [user, caseId, loadCase, loadDocs]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !token) return;
+    if (!file || !user) return;
     setUploading(true);
     setError("");
     try {
-      await api.uploadDoc(token, caseId, file, false);
+      await api.uploadDoc(caseId, file, false);
       loadDocs();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -70,9 +70,9 @@ export default function CaseDetailPage() {
   }
 
   async function toggleInmateVisible(docId: string, current: boolean) {
-    if (!token) return;
+    if (!user) return;
     try {
-      await api.updateDocInmateVisible(token, docId, !current);
+      await api.updateDocInmateVisible(docId, !current);
       setDocs((prev) =>
         prev.map((d) =>
           d.id === docId ? { ...d, inmate_visible: !current } : d

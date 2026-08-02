@@ -5,72 +5,51 @@ import type { User } from "@/lib/api";
 import * as api from "@/lib/api";
 
 type AuthState = {
-  token: string | null;
   user: User | null;
   loading: boolean;
 };
 
 type AuthContextValue = AuthState & {
   login: (email: string, password: string) => Promise<User>;
-  logout: () => void;
-  setToken: (token: string | null) => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = "auth_token";
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const setToken = useCallback((t: string | null) => {
-    setTokenState(t);
-    if (t) {
-      document.cookie = `${TOKEN_KEY}=${t}; path=/; max-age=604800`; // 7 days
-    } else {
-      document.cookie = `${TOKEN_KEY}=; path=/; max-age=0`;
-    }
+  useEffect(() => {
+    api
+      .me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    const stored = document.cookie
-      .split("; ")
-      .find((c) => c.startsWith(`${TOKEN_KEY}=`))
-      ?.split("=")[1];
-    if (stored) {
-      setTokenState(stored);
-      api
-        .me(stored)
-        .then(setUser)
-        .catch(() => setToken(null))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+  const login = useCallback(async (email: string, password: string): Promise<User> => {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "Login failed");
     }
-  }, [setToken]);
+    const { user: u } = (await res.json()) as { user: User };
+    setUser(u);
+    return u;
+  }, []);
 
-  const login = useCallback(
-    async (email: string, password: string): Promise<User> => {
-      const { access_token } = await api.login(email, password);
-      setToken(access_token);
-      const u = await api.me(access_token);
-      setUser(u);
-      return u;
-    },
-    [setToken]
-  );
-
-  const logout = useCallback(() => {
-    setToken(null);
+  const logout = useCallback(async () => {
+    await fetch("/api/logout", { method: "POST" });
     setUser(null);
-  }, [setToken]);
+  }, []);
 
   return (
-    <AuthContext.Provider
-      value={{ token, user, loading, login, logout, setToken }}
-    >
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

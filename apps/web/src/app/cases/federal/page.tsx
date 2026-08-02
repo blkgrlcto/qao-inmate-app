@@ -10,7 +10,7 @@ import { SkeletonList } from "@/components/inmate/SkeletonCard";
 import * as api from "@/lib/api";
 
 export default function FederalCaseSearchPage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const [courtId, setCourtId] = useState("");
   const [results, setResults] = useState<FederalCaseResult[]>([]);
@@ -21,12 +21,12 @@ export default function FederalCaseSearchPage() {
   const [searched, setSearched] = useState(false);
 
   const search = useCallback(() => {
-    if (!token || !q.trim()) return;
+    if (!user || !q.trim()) return;
     setLoading(true);
     setError("");
     setSearched(true);
     api
-      .searchFederalCases(token, {
+      .searchFederalCases({
         q: q.trim(),
         court_id: courtId.trim() || undefined,
         limit: 20,
@@ -45,13 +45,13 @@ export default function FederalCaseSearchPage() {
         setResults([]);
       })
       .finally(() => setLoading(false));
-  }, [token, q, courtId]);
+  }, [user, q, courtId]);
 
   const loadMore = useCallback(() => {
-    if (!token || !q.trim() || !nextCursor) return;
+    if (!user || !q.trim() || !nextCursor) return;
     setLoading(true);
     api
-      .searchFederalCases(token, {
+      .searchFederalCases({
         q: q.trim(),
         court_id: courtId.trim() || undefined,
         limit: 20,
@@ -66,7 +66,7 @@ export default function FederalCaseSearchPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Load more failed"))
       .finally(() => setLoading(false));
-  }, [token, q, courtId, nextCursor]);
+  }, [user, q, courtId, nextCursor]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">

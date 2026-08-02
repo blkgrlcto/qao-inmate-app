@@ -64,6 +64,10 @@ services:
     container_name: qao-web
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Server-side-only: used by Next.js Route Handlers (apiProxy, /api/login)
+      # running inside this container, where "localhost:8000" doesn't reach
+      # the api container. NEXT_PUBLIC_API_URL stays host-facing for the browser.
+      API_INTERNAL_URL: http://api:8000
     ports:
       - "3000:3000"
     depends_on:

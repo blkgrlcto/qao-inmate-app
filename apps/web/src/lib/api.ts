@@ -1,5 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_BASE = `${API_URL}/api/v1`;
+// Same-origin proxy — the browser auto-attaches the httpOnly auth cookie here,
+// and apiProxy/[...path]/route.ts forwards it as a Bearer header server-side.
+const API_BASE = "/apiProxy";
 
 export type User = {
   id: string;
@@ -8,72 +9,52 @@ export type User = {
   role: string;
 };
 
-export async function login(email: string, password: string): Promise<{ access_token: string }> {
-  const form = new URLSearchParams();
-  form.set("username", email);
-  form.set("password", password);
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail || "Login failed");
-  }
-  return res.json();
-}
-
-export async function me(token: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function me(): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/me`);
   if (!res.ok) throw new Error("Not authenticated");
   return res.json();
 }
 
-export async function listCases(token: string) {
-  const res = await fetch(`${API_BASE}/cases`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listCases() {
+  const res = await fetch(`${API_BASE}/cases`);
   if (!res.ok) throw new Error("Failed to fetch cases");
   return res.json();
 }
 
-export async function getCase(token: string, id: string) {
-  const res = await fetch(`${API_BASE}/cases/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+export async function createCase(title: string, description?: string) {
+  const res = await fetch(`${API_BASE}/cases`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, description: description || null }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Failed to create case");
+  }
+  return res.json();
+}
+
+export async function getCase(id: string) {
+  const res = await fetch(`${API_BASE}/cases/${id}`);
   if (!res.ok) throw new Error("Failed to fetch case");
   return res.json();
 }
 
-export async function listCaseDocs(token: string, caseId: string, q?: string) {
-  const url = new URL(`${API_BASE}/cases/${caseId}/docs`);
+export async function listCaseDocs(caseId: string, q?: string) {
+  const url = new URL(`${API_BASE}/cases/${caseId}/docs`, window.location.origin);
   if (q) url.searchParams.set("q", q);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(url.toString());
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
 }
 
-export async function uploadDoc(
-  token: string,
-  caseId: string,
-  file: File,
-  inmateVisible: boolean
-) {
+export async function uploadDoc(caseId: string, file: File, inmateVisible: boolean) {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(
-    `${API_BASE}/cases/${caseId}/docs?inmate_visible=${inmateVisible}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    }
-  );
+  const res = await fetch(`${API_BASE}/cases/${caseId}/docs?inmate_visible=${inmateVisible}`, {
+    method: "POST",
+    body: form,
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail || "Upload failed");
@@ -81,27 +62,18 @@ export async function uploadDoc(
   return res.json();
 }
 
-export async function updateDocInmateVisible(
-  token: string,
-  docId: string,
-  inmateVisible: boolean
-) {
+export async function updateDocInmateVisible(docId: string, inmateVisible: boolean) {
   const res = await fetch(`${API_BASE}/files/${docId}`, {
     method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ inmate_visible: inmateVisible }),
   });
   if (!res.ok) throw new Error("Failed to update document");
   return res.json();
 }
 
-export async function listInmateDocs(token: string) {
-  const res = await fetch(`${API_BASE}/docs/inmate`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listInmateDocs() {
+  const res = await fetch(`${API_BASE}/docs/inmate`);
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
 }
@@ -135,18 +107,18 @@ export type FederalCaseResult = {
   detected_mode: string;
 };
 
-export async function searchFederalCases(
-  token: string,
-  params: { q: string; court_id?: string; limit?: number; cursor?: string }
-) {
-  const url = new URL(`${API_BASE}/federal-cases/search`);
+export async function searchFederalCases(params: {
+  q: string;
+  court_id?: string;
+  limit?: number;
+  cursor?: string;
+}) {
+  const url = new URL(`${API_BASE}/federal-cases/search`, window.location.origin);
   url.searchParams.set("q", params.q);
   if (params.court_id) url.searchParams.set("court_id", params.court_id);
   if (params.limit) url.searchParams.set("limit", String(params.limit));
   if (params.cursor) url.searchParams.set("cursor", params.cursor);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(url.toString());
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail || "Search failed");
@@ -154,19 +126,90 @@ export async function searchFederalCases(
   return res.json();
 }
 
-export async function searchSimilar(
-  token: string,
-  params: { q: string; jurisdiction?: string; disposition?: string[]; limit?: number }
-) {
-  const url = new URL(`${API_BASE}/similar`);
+export async function searchSimilar(params: {
+  q: string;
+  jurisdiction?: string;
+  disposition?: string[];
+  limit?: number;
+}) {
+  const url = new URL(`${API_BASE}/similar`, window.location.origin);
   url.searchParams.set("q", params.q);
   if (params.jurisdiction) url.searchParams.set("jurisdiction", params.jurisdiction);
   if (params.disposition?.length)
     params.disposition.forEach((d) => url.searchParams.append("disposition", d));
   if (params.limit) url.searchParams.set("limit", String(params.limit));
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Search failed");
+  }
+  return res.json();
+}
+
+// Admin
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  created_at: string;
+};
+
+export async function adminListUsers(): Promise<AdminUser[]> {
+  const res = await fetch(`${API_BASE}/admin/users`);
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
+export async function adminCreateUser(input: {
+  email: string;
+  password: string;
+  full_name: string;
+  role: string;
+}): Promise<AdminUser> {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
   });
-  if (!res.ok) throw new Error("Search failed");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Failed to create user");
+  }
+  return res.json();
+}
+
+export type ShareRow = {
+  id: string;
+  case_id: string;
+  user_id: string;
+  role: string;
+  user_email: string;
+  user_full_name: string;
+};
+
+export async function adminListShares(caseId: string): Promise<ShareRow[]> {
+  const url = new URL(`${API_BASE}/admin/shares`, window.location.origin);
+  url.searchParams.set("case_id", caseId);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error("Failed to fetch shares");
+  return res.json();
+}
+
+export async function adminCreateShare(input: {
+  case_id: string;
+  user_id: string;
+  role: string;
+}): Promise<ShareRow> {
+  const res = await fetch(`${API_BASE}/admin/shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Failed to grant access");
+  }
   return res.json();
 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// API_INTERNAL_URL is for server-side (this file runs in the Next.js server,
+// not the browser) container-to-container calls; NEXT_PUBLIC_API_URL is
+// host-facing and only correct here outside Docker where both coincide.
+const API_URL =
+  process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function GET(
   request: NextRequest,
@@ -37,7 +41,10 @@ async function proxy(
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   request.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== "host" && k.toLowerCase() !== "cookie") {
+    // content-length must NOT be forwarded verbatim — fetch() computes its
+    // own for the outgoing body, and a stale/duplicate value here can make
+    // the upstream server see a truncated or empty body.
+    if (!["host", "cookie", "content-length"].includes(k.toLowerCase())) {
       headers[k] = v;
     }
   });
@@ -47,17 +54,21 @@ async function proxy(
     headers,
   };
   if (method !== "GET" && method !== "HEAD") {
-    init.body = await request.text();
-    if (request.headers.get("content-type")) {
-      (init.headers as Record<string, string>)["Content-Type"] =
-        request.headers.get("content-type")!;
-    }
+    // Use arrayBuffer (not text) to preserve raw bytes for binary/multipart
+    // bodies (e.g. PDF uploads) — text() would corrupt them via UTF-8 decoding.
+    // content-type is already carried over by the forEach loop above — do NOT
+    // set it again here under a differently-cased key ("Content-Type"), since
+    // headers is a plain object and JS object keys are case-sensitive: that
+    // previously produced two distinct content-type entries in the same request.
+    init.body = await request.arrayBuffer();
   }
 
   const res = await fetch(target, init);
   const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  const body = isJson ? await res.json() : await res.arrayBuffer();
+  // Pass the raw bytes straight through — parsing JSON here and handing the
+  // resulting object to NextResponse would stringify it as "[object Object]"
+  // instead of re-serializing it.
+  const body = await res.arrayBuffer();
 
   const responseHeaders: Record<string, string> = {
     "Content-Type": contentType,

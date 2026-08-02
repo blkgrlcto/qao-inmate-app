@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "@/context/auth";
 
 const DOCS_READER_PATTERN = /^\/inmate\/documents\/[^/]+$/;
@@ -20,7 +21,12 @@ export default function InmateLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (user && user.role !== "inmate") router.replace("/cases");
+  }, [user, router]);
 
   if (user && user.role !== "inmate") {
     return (

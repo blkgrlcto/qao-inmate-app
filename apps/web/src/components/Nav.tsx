@@ -8,6 +8,7 @@ export function Nav() {
   if (!user) return null;
 
   const isStaff = user.role === "attorney" || user.role === "paralegal";
+  const isAdmin = user.role === "admin";
 
   return (
     <nav className="border-b border-gray-200 bg-white px-4 py-2">
@@ -16,7 +17,7 @@ export function Nav() {
           <Link href="/" className="font-medium text-gray-900 hover:text-blue-600">
             Home
           </Link>
-          {isStaff ? (
+          {isStaff && (
             <>
               <Link
                 href="/cases"
@@ -31,7 +32,16 @@ export function Nav() {
                 Federal Search
               </Link>
             </>
-          ) : (
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="font-medium text-gray-600 hover:text-blue-600"
+            >
+              Admin
+            </Link>
+          )}
+          {!isStaff && !isAdmin && (
             <Link
               href="/inmate"
               className="font-medium text-gray-600 hover:text-blue-600"

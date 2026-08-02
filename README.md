@@ -41,7 +41,7 @@ docker compose up -d api web
 - API: http://localhost:8000
 - API docs: http://localhost:8000/docs
 
-Demo login: **attorney@demo.local** / **demo123**
+Demo login: **attorney@demo.local** / **demo123** (also: paralegal@demo.local, inmate@demo.local, admin@demo.local — all demo123)
 
 ## Development Setup
 
@@ -111,10 +111,19 @@ Run the apps locally with your own Postgres/MinIO. Set `DB_URL` in `services/api
 
 ## Auth
 
-- **Login:** `POST /api/v1/auth/login` with form fields `username` (email) and `password`
-- **Current user:** `GET /api/v1/auth/me` with `Authorization: Bearer <token>`
+- **API layer:** `POST /api/v1/auth/login` (form fields `username`/`password`) returns a bearer JWT; `GET /api/v1/auth/me` with `Authorization: Bearer <token>` returns the current user.
+- **Browser/frontend:** the web app never holds the raw JWT in client-side JS. `POST /api/login` (a Next.js route, not the API) logs in against the API above and sets the token as an httpOnly cookie; all frontend API calls go through `/apiProxy/*`, which reads that cookie server-side and forwards it as the `Authorization` header. `POST /api/logout` clears the cookie.
 
-Demo accounts: attorney@demo.local, paralegal@demo.local, inmate@demo.local (all: demo123)
+Demo accounts: attorney@demo.local, paralegal@demo.local, inmate@demo.local, admin@demo.local (all: demo123)
+
+## Admin
+
+Admin-only endpoints (`Authorization: Bearer <token>` from an `admin`-role user):
+
+- `GET /api/v1/admin/users`, `POST /api/v1/admin/users` — list/create users
+- `GET /api/v1/admin/shares?case_id=...`, `POST /api/v1/admin/shares` — view/grant case access
+
+Frontend: `/admin` (redirects non-admins).
 
 ## Documents
 
@@ -144,6 +153,27 @@ Files stored in MinIO. PDF text extracted for search. Audit logs for upload/view
 | `cd infra && docker compose down` | Stop all services |
 | `cd apps/web && npm run dev` | Next.js dev server |
 | `cd services/api && source .venv/bin/activate && uvicorn app.main:app --reload` | FastAPI dev server |
+
+## Running Tests
+
+Backend tests run against a real Postgres database (not sqlite/mocks) because the schema
+relies on Postgres-specific features (tsvector, pgvector, enum types), plus real MinIO for
+upload tests. They create their own `qao_inmate_test` database and roll back every test's
+writes in a transaction, so they're safe to run against the same Postgres/MinIO you use for
+local dev.
+
+```bash
+cd infra
+docker compose up -d postgres minio
+
+cd ../services/api
+source .venv/bin/activate   # from Development Setup above
+pip install -r requirements-dev.txt
+pytest
+```
+
+Set `TEST_DATABASE_URL` to point at a different Postgres instance/database if you don't want
+to use the default (`postgresql+asyncpg://postgres:postgres@localhost:5432/qao_inmate_test`).
 
 ## MinIO (Object Storage)
 

@@ -9,11 +9,11 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.models.case import Case
 from app.models.document import Document
 from app.models.share import Share
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.db.session import get_db
 from app.services.pdf import extract_text_from_pdf
 from app.services.s3 import get_object_stream, upload_file
@@ -63,6 +63,32 @@ async def list_cases(
         {"id": str(c.id), "title": c.title, "description": c.description, "status": c.status, "updated_at": c.updated_at.isoformat()}
         for c in cases
     ]
+
+
+@cases_router.post("")
+async def create_case(
+    title: str = Body(...),
+    description: Optional[str] = Body(None),
+    current_user: Annotated[User, Depends(require_roles(UserRole.ATTORNEY, UserRole.PARALEGAL))] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Create a case. Attorney/paralegal only. Creator is auto-shared as owner."""
+    case = Case(title=title, description=description, created_by_id=current_user.id)
+    db.add(case)
+    await db.flush()
+
+    db.add(Share(case_id=case.id, user_id=current_user.id, role="owner"))
+    await db.flush()
+
+    await log_audit(db, current_user.id, "case_create", "case", str(case.id))
+
+    return {
+        "id": str(case.id),
+        "title": case.title,
+        "description": case.description,
+        "status": case.status,
+        "updated_at": case.updated_at.isoformat(),
+    }
 
 
 @cases_router.get("/{case_id}")
@@ -216,7 +242,7 @@ async def list_inmate_documents(
 @files_router.patch("/{doc_id}")
 async def update_document(
     doc_id: uuid.UUID,
-    inmate_visible: Optional[bool] = Body(None),
+    inmate_visible: Optional[bool] = Body(None, embed=True),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
 ):

@@ -18,7 +18,7 @@ type Doc = {
 type Filter = "all" | "new" | "offline" | "important";
 
 export default function InmateDocumentsPage() {
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -26,15 +26,15 @@ export default function InmateDocumentsPage() {
   const [search, setSearch] = useState("");
 
   const load = useCallback(() => {
-    if (!token || (user && user.role !== "inmate")) return;
+    if (!user || user.role !== "inmate") return;
     setLoading(true);
     setError("");
     api
-      .listInmateDocs(token)
+      .listInmateDocs()
       .then(setDocs)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, [token, user]);
+  }, [user]);
 
   useEffect(() => {
     load();

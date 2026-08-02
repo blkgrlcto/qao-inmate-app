@@ -15,5 +15,5 @@ def extract_text_from_pdf(data: bytes) -> Optional[str]:
         doc.close()
         text = "\n".join(chunks).strip()
         return text if text else None
-    except (pymupdf.FitzException, Exception):
+    except Exception:
         return None

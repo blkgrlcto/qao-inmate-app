@@ -19,7 +19,7 @@ const JURISDICTIONS = ["All", "US", "PA", "Federal", "State"];
 const DISPOSITIONS = ["All", "AFFIRMED", "REVERSED", "VACATED", "REMANDED", "DISMISSED"];
 
 export default function InmateSimilarPage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [jurisdiction, setJurisdiction] = useState("All");
   const [dispositions, setDispositions] = useState<string[]>(["All"]);
@@ -29,7 +29,7 @@ export default function InmateSimilarPage() {
   const [hasSearched, setHasSearched] = useState(false);
 
   const search = useCallback(() => {
-    if (!token || !query.trim()) return;
+    if (!user || !query.trim()) return;
     setLoading(true);
     setError("");
     setHasSearched(true);
@@ -38,7 +38,7 @@ export default function InmateSimilarPage() {
         ? undefined
         : dispositions;
     api
-      .searchSimilar(token, {
+      .searchSimilar({
         q: query.trim(),
         jurisdiction: jurisdiction === "All" ? undefined : jurisdiction,
         disposition: dispositionParams,
@@ -50,7 +50,7 @@ export default function InmateSimilarPage() {
         setResults([]);
       })
       .finally(() => setLoading(false));
-  }, [token, query, jurisdiction, dispositions]);
+  }, [user, query, jurisdiction, dispositions]);
 
   const toggleDisposition = (d: string) => {
     if (d === "All") {
@@ -107,12 +107,12 @@ export default function InmateSimilarPage() {
               key={suggested}
               onClick={() => {
                 setQuery(suggested);
-                if (token) {
+                if (user) {
                   setLoading(true);
                   setError("");
                   setHasSearched(true);
                   api
-                    .searchSimilar(token, { q: suggested, limit: 10 })
+                    .searchSimilar({ q: suggested, limit: 10 })
                     .then((d: { results?: SimilarResult[] }) => setResults(d.results || []))
                     .catch((e) => {
                       setError(e instanceof Error ? e.message : "Search failed");
