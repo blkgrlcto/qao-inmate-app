@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { User } from "@/lib/api";
 import * as api from "@/lib/api";
@@ -16,9 +17,14 @@ type AuthContextValue = AuthState & {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Pages that don't require a session — no redirect-to-login for these.
+const PUBLIC_PATHS = ["/", "/login"];
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     api
@@ -27,6 +33,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    // Without this, a page whose data-fetching effects gate on `user` (most
+    // of them) just hangs on its loading state forever once session cookies
+    // are missing/expired/revoked — there's no other global auth guard.
+    if (!loading && !user && pathname && !PUBLIC_PATHS.includes(pathname)) {
+      router.replace("/login");
+    }
+  }, [loading, user, pathname, router]);
 
   const login = useCallback(async (email: string, password: string): Promise<User> => {
     const res = await fetch("/api/login", {

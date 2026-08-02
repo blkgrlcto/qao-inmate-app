@@ -20,19 +20,29 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(subject: Union[str, Any]) -> str:
-    """Create a JWT access token."""
+def _create_token(subject: Union[str, Any], token_version: int, token_type: str, expire_minutes: int) -> str:
     settings = get_settings()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-    to_encode = {"exp": expire, "sub": str(subject)}
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+    to_encode = {"exp": expire, "sub": str(subject), "ver": token_version, "type": token_type}
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def decode_access_token(token: str):
-    """Decode and validate JWT, return subject (user id) or None."""
+def create_access_token(subject: Union[str, Any], token_version: int) -> str:
+    """Create a short-lived JWT access token."""
+    settings = get_settings()
+    return _create_token(subject, token_version, "access", settings.JWT_EXPIRE_MINUTES)
+
+
+def create_refresh_token(subject: Union[str, Any], token_version: int) -> str:
+    """Create a longer-lived JWT refresh token, used only to mint new access tokens."""
+    settings = get_settings()
+    return _create_token(subject, token_version, "refresh", settings.JWT_REFRESH_EXPIRE_MINUTES)
+
+
+def decode_token(token: str) -> Optional[dict]:
+    """Decode and validate a JWT, returning its full payload, or None if invalid/expired."""
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        return payload.get("sub")
+        return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     except JWTError:
         return None

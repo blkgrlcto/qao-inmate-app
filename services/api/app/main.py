@@ -1,6 +1,9 @@
 """FastAPI application entry point."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api import router
 from app.api.admin import admin_router
@@ -9,12 +12,17 @@ from app.api.documents import cases_router, docs_router, files_router
 from app.api.federal_cases import router as federal_cases_router
 from app.api.similar import similar_router
 from app.core.config import settings
+from app.core.rate_limit import limiter
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="API service for qao-inmate-app",
     version="0.1.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

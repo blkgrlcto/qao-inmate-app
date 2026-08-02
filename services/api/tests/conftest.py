@@ -28,10 +28,20 @@ TEST_DB_URL = os.environ.get(
 # and app.db.session.engine are both constructed at import time from this.
 os.environ["DB_URL"] = TEST_DB_URL
 
+from app.core.rate_limit import limiter  # noqa: E402
 from app.core.security import create_access_token, hash_password  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import User  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """The rate limiter's storage is a process-wide singleton (keyed by
+    client IP + route), so without a reset, one test's /auth/login calls
+    count toward another test's budget regardless of execution order."""
+    limiter.reset()
+    yield
 
 API_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -110,5 +120,5 @@ async def make_user(db_session, role: str, email: str | None = None, password: s
 
 
 def auth_header(user: User) -> dict:
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(subject=str(user.id), token_version=user.token_version)
     return {"Authorization": f"Bearer {token}"}

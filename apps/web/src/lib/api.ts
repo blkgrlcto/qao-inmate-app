@@ -40,6 +40,50 @@ export async function getCase(id: string) {
   return res.json();
 }
 
+export const CASE_STATUSES = ["open", "active", "awaiting_decision", "closed"] as const;
+export type CaseStatusValue = (typeof CASE_STATUSES)[number];
+
+export async function updateCaseStatus(caseId: string, status: CaseStatusValue) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update status");
+  return res.json();
+}
+
+export type Deadline = {
+  id: string;
+  title: string;
+  due_date: string;
+  notes: string | null;
+};
+
+export async function listDeadlines(caseId: string): Promise<Deadline[]> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/deadlines`);
+  if (!res.ok) throw new Error("Failed to fetch deadlines");
+  return res.json();
+}
+
+export async function createDeadline(caseId: string, title: string, dueDate: string, notes?: string) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/deadlines`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, due_date: dueDate, notes: notes || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Failed to add deadline");
+  }
+  return res.json();
+}
+
+export async function deleteDeadline(caseId: string, deadlineId: string) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/deadlines/${deadlineId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete deadline");
+}
+
 export async function listCaseDocs(caseId: string, q?: string) {
   const url = new URL(`${API_BASE}/cases/${caseId}/docs`, window.location.origin);
   if (q) url.searchParams.set("q", q);
@@ -178,6 +222,11 @@ export async function adminCreateUser(input: {
     throw new Error((err as { detail?: string }).detail || "Failed to create user");
   }
   return res.json();
+}
+
+export async function adminRevokeUserSessions(userId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/revoke`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to revoke sessions");
 }
 
 export type ShareRow = {

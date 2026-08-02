@@ -17,6 +17,9 @@ export default function AdminPage() {
   const [role, setRole] = useState("attorney");
   const [creatingUser, setCreatingUser] = useState(false);
 
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeMessage, setRevokeMessage] = useState("");
+
   const [shareCaseId, setShareCaseId] = useState("");
   const [shareUserId, setShareUserId] = useState("");
   const [shareRole, setShareRole] = useState("viewer");
@@ -50,6 +53,19 @@ export default function AdminPage() {
       setUserError(err instanceof Error ? err.message : "Failed to create user");
     } finally {
       setCreatingUser(false);
+    }
+  }
+
+  async function handleRevoke(userId: string) {
+    setRevokingId(userId);
+    setRevokeMessage("");
+    try {
+      await api.adminRevokeUserSessions(userId);
+      setRevokeMessage("Sessions revoked — that user will need to log in again.");
+    } catch (err) {
+      setRevokeMessage(err instanceof Error ? err.message : "Failed to revoke sessions");
+    } finally {
+      setRevokingId(null);
     }
   }
 
@@ -156,6 +172,7 @@ export default function AdminPage() {
                 <th className="py-2 pr-4">Name</th>
                 <th className="py-2 pr-4">Role</th>
                 <th className="py-2 pr-4">ID</th>
+                <th className="py-2 pr-4"></th>
               </tr>
             </thead>
             <tbody>
@@ -165,11 +182,21 @@ export default function AdminPage() {
                   <td className="py-2 pr-4">{u.full_name}</td>
                   <td className="py-2 pr-4">{u.role}</td>
                   <td className="py-2 pr-4 font-mono text-xs text-gray-400">{u.id}</td>
+                  <td className="py-2 pr-4">
+                    <button
+                      onClick={() => handleRevoke(u.id)}
+                      disabled={revokingId === u.id}
+                      className="rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {revokingId === u.id ? "Revoking…" : "Revoke sessions"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {revokeMessage && <p className="mt-2 text-sm text-gray-500">{revokeMessage}</p>}
       </section>
 
       <section>

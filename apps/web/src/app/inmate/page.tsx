@@ -6,7 +6,9 @@ import { useAuth } from "@/context/auth";
 import { EmptyState } from "@/components/inmate/EmptyState";
 import { ErrorState } from "@/components/inmate/ErrorState";
 import { SkeletonList } from "@/components/inmate/SkeletonCard";
+import { StatusBadge } from "@/components/StatusBadge";
 import * as api from "@/lib/api";
+import type { Deadline } from "@/lib/api";
 
 type Doc = {
   id: string;
@@ -21,6 +23,8 @@ export default function InmateMyCasePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [caseStatus, setCaseStatus] = useState<string | null>(null);
+  const [nextDeadline, setNextDeadline] = useState<Deadline | null>(null);
 
   const load = useCallback(() => {
     if (!user || user.role !== "inmate") return;
@@ -31,6 +35,17 @@ export default function InmateMyCasePage() {
       .then((data) => {
         setDocs(data);
         setLastSync(new Date());
+        const caseId = data[0]?.case_id;
+        if (caseId) {
+          api.getCase(caseId).then((c) => setCaseStatus(c.status)).catch(() => {});
+          api
+            .listDeadlines(caseId)
+            .then((ds: Deadline[]) => {
+              const today = new Date().toISOString().slice(0, 10);
+              setNextDeadline(ds.find((d) => d.due_date >= today) || null);
+            })
+            .catch(() => {});
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
@@ -68,11 +83,19 @@ export default function InmateMyCasePage() {
         <div className="space-y-6">
           {/* Case header */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-stone-800">{caseTitle}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-stone-800">{caseTitle}</h2>
+              {caseStatus && <StatusBadge status={caseStatus} />}
+            </div>
             <p className="mt-1 text-stone-600">
               {docs.length} document{docs.length !== 1 ? "s" : ""} shared with
               you
             </p>
+            {nextDeadline && (
+              <p className="mt-2 text-sm font-medium text-amber-700">
+                Next deadline: {nextDeadline.title} ({nextDeadline.due_date})
+              </p>
+            )}
           </div>
 
           {/* New items card */}

@@ -1,6 +1,7 @@
 """SQLAlchemy models."""
 from app.models.audit_log import AuditLog
 from app.models.case import Case
+from app.models.deadline import Deadline
 from app.models.document import Document
 from app.models.federal_case_cache import FederalCaseCache
 from app.models.federal_case_search_log import FederalCaseSearchLog
@@ -12,6 +13,7 @@ from app.models.user import User
 __all__ = [
     "AuditLog",
     "Case",
+    "Deadline",
     "Document",
     "FederalCaseCache",
     "FederalCaseSearchLog",

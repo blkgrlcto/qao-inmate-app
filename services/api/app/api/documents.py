@@ -1,6 +1,7 @@
 """Document upload, list, and stream endpoints."""
 import io
 import uuid
+from datetime import date
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile
@@ -10,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit
 from app.core.deps import get_current_user, require_roles
-from app.models.case import Case
+from app.models.case import Case, CaseStatus
+from app.models.deadline import Deadline
 from app.models.document import Document
 from app.models.share import Share
 from app.models.user import User, UserRole
@@ -46,6 +48,23 @@ async def _can_access_document(
     return True
 
 
+async def _next_deadlines_for_cases(db: AsyncSession, case_ids: list) -> dict:
+    """Map case_id -> soonest upcoming (or today's) deadline, as {title, due_date}."""
+    if not case_ids:
+        return {}
+    today = date.today()
+    result = await db.execute(
+        select(Deadline)
+        .where(Deadline.case_id.in_(case_ids), Deadline.due_date >= today)
+        .order_by(Deadline.case_id, Deadline.due_date)
+    )
+    next_by_case = {}
+    for d in result.scalars().all():
+        if d.case_id not in next_by_case:
+            next_by_case[d.case_id] = {"title": d.title, "due_date": d.due_date.isoformat()}
+    return next_by_case
+
+
 @cases_router.get("")
 async def list_cases(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -59,8 +78,16 @@ async def list_cases(
         .order_by(Case.updated_at.desc())
     )
     cases = result.scalars().all()
+    next_deadlines = await _next_deadlines_for_cases(db, [c.id for c in cases])
     return [
-        {"id": str(c.id), "title": c.title, "description": c.description, "status": c.status, "updated_at": c.updated_at.isoformat()}
+        {
+            "id": str(c.id),
+            "title": c.title,
+            "description": c.description,
+            "status": c.status,
+            "updated_at": c.updated_at.isoformat(),
+            "next_deadline": next_deadlines.get(c.id),
+        }
         for c in cases
     ]
 
@@ -104,13 +131,116 @@ async def get_case(
     case = result.scalar_one_or_none()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
+    next_deadlines = await _next_deadlines_for_cases(db, [case.id])
     return {
         "id": str(case.id),
         "title": case.title,
         "description": case.description,
         "status": case.status,
         "updated_at": case.updated_at.isoformat(),
+        "next_deadline": next_deadlines.get(case.id),
     }
+
+
+@cases_router.patch("/{case_id}")
+async def update_case_status(
+    case_id: uuid.UUID,
+    status: str = Body(..., embed=True),
+    current_user: Annotated[User, Depends(require_roles(UserRole.ATTORNEY, UserRole.PARALEGAL))] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Update a case's status. Attorney/paralegal with case access only."""
+    if not await _user_has_case_access(db, current_user.id, case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if status not in {s.value for s in CaseStatus}:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+    result = await db.execute(select(Case).where(Case.id == case_id))
+    case = result.scalar_one_or_none()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case.status = status
+    await db.flush()
+
+    await log_audit(db, current_user.id, "case_status_update", "case", str(case.id), {"status": status})
+
+    return {"id": str(case.id), "status": case.status}
+
+
+@cases_router.get("/{case_id}/deadlines")
+async def list_deadlines(
+    case_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List deadlines for a case. Requires share access (read-only for inmates)."""
+    if not await _user_has_case_access(db, current_user.id, case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    result = await db.execute(
+        select(Deadline).where(Deadline.case_id == case_id).order_by(Deadline.due_date)
+    )
+    deadlines = result.scalars().all()
+    return [
+        {
+            "id": str(d.id),
+            "title": d.title,
+            "due_date": d.due_date.isoformat(),
+            "notes": d.notes,
+        }
+        for d in deadlines
+    ]
+
+
+@cases_router.post("/{case_id}/deadlines")
+async def create_deadline(
+    case_id: uuid.UUID,
+    title: str = Body(...),
+    due_date: date = Body(...),
+    notes: Optional[str] = Body(None),
+    current_user: Annotated[User, Depends(require_roles(UserRole.ATTORNEY, UserRole.PARALEGAL))] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Add a deadline to a case. Attorney/paralegal with case access only."""
+    if not await _user_has_case_access(db, current_user.id, case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    deadline = Deadline(case_id=case_id, title=title, due_date=due_date, notes=notes)
+    db.add(deadline)
+    await db.flush()
+
+    await log_audit(db, current_user.id, "deadline_create", "deadline", str(deadline.id))
+
+    return {
+        "id": str(deadline.id),
+        "title": deadline.title,
+        "due_date": deadline.due_date.isoformat(),
+        "notes": deadline.notes,
+    }
+
+
+@cases_router.delete("/{case_id}/deadlines/{deadline_id}")
+async def delete_deadline(
+    case_id: uuid.UUID,
+    deadline_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.ATTORNEY, UserRole.PARALEGAL))] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Remove a deadline from a case. Attorney/paralegal with case access only."""
+    if not await _user_has_case_access(db, current_user.id, case_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    result = await db.execute(
+        select(Deadline).where(Deadline.id == deadline_id, Deadline.case_id == case_id)
+    )
+    deadline = result.scalar_one_or_none()
+    if not deadline:
+        raise HTTPException(status_code=404, detail="Deadline not found")
+
+    await db.delete(deadline)
+    await log_audit(db, current_user.id, "deadline_delete", "deadline", str(deadline_id))
+
+    return {"id": str(deadline_id), "deleted": True}
 
 
 @cases_router.post("/{case_id}/docs")

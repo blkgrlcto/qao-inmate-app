@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth";
 import * as api from "@/lib/api";
+import { StatusBadge } from "@/components/StatusBadge";
 
 type CaseRow = {
   id: string;
@@ -12,6 +13,7 @@ type CaseRow = {
   description: string | null;
   status: string;
   updated_at: string;
+  next_deadline: { title: string; due_date: string } | null;
 };
 
 export default function CasesPage() {
@@ -131,10 +133,16 @@ export default function CasesPage() {
                 href={`/cases/${c.id}`}
                 className="block rounded border border-gray-200 p-3 hover:bg-gray-50"
               >
-                <span className="font-medium">{c.title}</span>
-                {c.description && (
-                  <span className="ml-2 text-sm text-gray-500">
-                    {c.description}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{c.title}</span>
+                  <StatusBadge status={c.status} />
+                  {c.description && (
+                    <span className="text-sm text-gray-500">{c.description}</span>
+                  )}
+                </div>
+                {c.next_deadline && (
+                  <span className="mt-1 block text-sm text-amber-700">
+                    Next deadline: {c.next_deadline.title} ({c.next_deadline.due_date})
                   </span>
                 )}
               </Link>

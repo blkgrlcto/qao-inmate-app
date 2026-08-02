@@ -81,6 +81,26 @@ async def create_user(
     }
 
 
+@admin_router.post("/users/{user_id}/revoke")
+async def revoke_user_sessions(
+    user_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.ADMIN))] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """Invalidate every access/refresh token previously issued to this user. Admin only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.token_version += 1
+    await db.flush()
+
+    await log_audit(db, current_user.id, "user_revoke_sessions", "user", str(user.id))
+
+    return {"id": str(user.id), "token_version": user.token_version}
+
+
 @admin_router.get("/shares")
 async def list_shares(
     case_id: uuid.UUID,

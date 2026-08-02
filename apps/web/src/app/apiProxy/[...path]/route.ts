@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// API_INTERNAL_URL is for server-side (this file runs in the Next.js server,
-// not the browser) container-to-container calls; NEXT_PUBLIC_API_URL is
-// host-facing and only correct here outside Docker where both coincide.
-const API_URL =
-  process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { ACCESS_TOKEN_MAX_AGE, API_BASE, API_URL, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, cookieOptions } from "@/lib/authCookies";
 
 export async function GET(
   request: NextRequest,
@@ -27,6 +22,38 @@ export async function PATCH(
   return proxy(request, params, "PATCH");
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  return proxy(request, params, "DELETE");
+}
+
+async function callBackend(
+  target: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: ArrayBuffer
+) {
+  const init: RequestInit = { method, headers };
+  if (body !== undefined) init.body = body;
+  return fetch(target, init);
+}
+
+/** Exchange the refresh_token cookie for a new access token, or null if absent/invalid. */
+async function tryRefresh(request: NextRequest): Promise<string | null> {
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_KEY)?.value;
+  if (!refreshToken) return null;
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!res.ok) return null;
+  const { access_token } = (await res.json()) as { access_token: string };
+  return access_token;
+}
+
 async function proxy(
   request: NextRequest,
   params: Promise<{ path: string[] }>,
@@ -36,39 +63,45 @@ async function proxy(
   const pathStr = path.join("/");
   const url = new URL(request.url);
   const target = `${API_URL}/api/v1/${pathStr}${url.search}`;
-  const token = request.cookies.get("auth_token")?.value;
 
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const baseHeaders: Record<string, string> = {};
   request.headers.forEach((v, k) => {
-    // content-length must NOT be forwarded verbatim — fetch() computes its
-    // own for the outgoing body, and a stale/duplicate value here can make
-    // the upstream server see a truncated or empty body.
-    if (!["host", "cookie", "content-length"].includes(k.toLowerCase())) {
-      headers[k] = v;
+    // content-length must NOT be forwarded verbatim — fetch() computes its own
+    // for the outgoing body, and a stale value here can make the upstream
+    // server see a truncated/empty body. authorization is excluded because we
+    // set it explicitly below from the cookie, not whatever the browser sent.
+    if (!["host", "cookie", "content-length", "authorization"].includes(k.toLowerCase())) {
+      baseHeaders[k] = v;
     }
   });
 
-  const init: RequestInit = {
-    method,
-    headers,
-  };
+  let body: ArrayBuffer | undefined;
   if (method !== "GET" && method !== "HEAD") {
     // Use arrayBuffer (not text) to preserve raw bytes for binary/multipart
     // bodies (e.g. PDF uploads) — text() would corrupt them via UTF-8 decoding.
-    // content-type is already carried over by the forEach loop above — do NOT
-    // set it again here under a differently-cased key ("Content-Type"), since
-    // headers is a plain object and JS object keys are case-sensitive: that
-    // previously produced two distinct content-type entries in the same request.
-    init.body = await request.arrayBuffer();
+    body = await request.arrayBuffer();
   }
 
-  const res = await fetch(target, init);
+  const token = request.cookies.get(AUTH_TOKEN_KEY)?.value;
+  const headersWithAuth = (t?: string) => (t ? { ...baseHeaders, Authorization: `Bearer ${t}` } : baseHeaders);
+
+  let res = await callBackend(target, method, headersWithAuth(token), body);
+
+  // Access tokens are short-lived (30 min) by design — transparently refresh
+  // and retry once on a 401 so users aren't logged out mid-session.
+  let refreshedToken: string | null = null;
+  if (res.status === 401 && pathStr !== "auth/refresh") {
+    refreshedToken = await tryRefresh(request);
+    if (refreshedToken) {
+      res = await callBackend(target, method, headersWithAuth(refreshedToken), body);
+    }
+  }
+
   const contentType = res.headers.get("content-type") || "";
   // Pass the raw bytes straight through — parsing JSON here and handing the
   // resulting object to NextResponse would stringify it as "[object Object]"
   // instead of re-serializing it.
-  const body = await res.arrayBuffer();
+  const responseBody = await res.arrayBuffer();
 
   const responseHeaders: Record<string, string> = {
     "Content-Type": contentType,
@@ -76,8 +109,12 @@ async function proxy(
   const contentDisposition = res.headers.get("content-disposition");
   if (contentDisposition) responseHeaders["Content-Disposition"] = contentDisposition;
 
-  return new NextResponse(body, {
+  const response = new NextResponse(responseBody, {
     status: res.status,
     headers: responseHeaders,
   });
+  if (refreshedToken) {
+    response.cookies.set(AUTH_TOKEN_KEY, refreshedToken, cookieOptions(request, ACCESS_TOKEN_MAX_AGE));
+  }
+  return response;
 }
