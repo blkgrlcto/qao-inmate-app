@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/auth";
 import * as api from "@/lib/api";
-import { CASE_STATUSES, type CaseStatusValue, type Deadline } from "@/lib/api";
+import { CASE_STATUSES, type AskResponse, type CaseStatusValue, type Deadline } from "@/lib/api";
 import { statusLabel } from "@/components/StatusBadge";
 
 type Doc = {
@@ -41,6 +41,11 @@ export default function CaseDetailPage() {
   const [deadlineNotes, setDeadlineNotes] = useState("");
   const [addingDeadline, setAddingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState("");
+
+  const [question, setQuestion] = useState("");
+  const [askResult, setAskResult] = useState<AskResponse | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState("");
 
   const loadCase = useCallback(() => {
     if (!user) return;
@@ -141,6 +146,22 @@ export default function CaseDetailPage() {
     }
   }
 
+  async function handleAsk(e: React.FormEvent) {
+    e.preventDefault();
+    if (!question.trim()) return;
+    setAsking(true);
+    setAskError("");
+    setAskResult(null);
+    try {
+      const res = await api.askAboutCase(caseId, question.trim());
+      setAskResult(res);
+    } catch (err) {
+      setAskError(err instanceof Error ? err.message : "Failed to get an answer");
+    } finally {
+      setAsking(false);
+    }
+  }
+
   if (!caseData) return <div className="p-6">Loading…</div>;
 
   return (
@@ -229,6 +250,53 @@ export default function CaseDetailPage() {
             {addingDeadline ? "Adding…" : "Add deadline"}
           </button>
         </form>
+      </section>
+
+      <section className="mb-6 rounded border border-gray-200 p-4">
+        <h2 className="mb-1 font-medium">Ask about this case</h2>
+        <p className="mb-3 text-xs text-gray-500">
+          Answers are grounded in this case&apos;s uploaded documents only, with citations back to
+          the source.
+        </p>
+        <form onSubmit={handleAsk} className="mb-3 flex gap-2">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="e.g. When is the next filing deadline?"
+            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={asking || !question.trim()}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {asking ? "Asking…" : "Ask"}
+          </button>
+        </form>
+        {askError && <p className="mb-2 text-sm text-red-600">{askError}</p>}
+        {askResult && (
+          <div className="rounded bg-gray-50 p-3 text-sm">
+            <p className="whitespace-pre-wrap">{askResult.answer}</p>
+            {askResult.citations.length > 0 && (
+              <div className="mt-3 border-t border-gray-200 pt-2">
+                <p className="mb-1 text-xs font-medium text-gray-500">Sources</p>
+                <ul className="space-y-1">
+                  {askResult.citations.map((c, i) => (
+                    <li key={i} className="text-xs text-gray-600">
+                      <Link href={`/files/${c.document_id}`} className="text-blue-600 hover:underline">
+                        {c.document_title}
+                      </Link>
+                      {" — "}
+                      <span className="italic">&ldquo;{c.snippet}&rdquo;</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-gray-400">via {askResult.provider}</p>
+          </div>
+        )}
       </section>
 
       <div className="mb-4 flex gap-4">

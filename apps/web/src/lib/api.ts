@@ -84,6 +84,32 @@ export async function deleteDeadline(caseId: string, deadlineId: string) {
   if (!res.ok) throw new Error("Failed to delete deadline");
 }
 
+export type AskCitation = {
+  document_id: string;
+  document_title: string;
+  chunk_index: number;
+  snippet: string;
+};
+
+export type AskResponse = {
+  answer: string;
+  citations: AskCitation[];
+  provider: string;
+};
+
+export async function askAboutCase(caseId: string, question: string): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE}/ai/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ case_id: caseId, question }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Failed to get an answer");
+  }
+  return res.json();
+}
+
 export async function listCaseDocs(caseId: string, q?: string) {
   const url = new URL(`${API_BASE}/cases/${caseId}/docs`, window.location.origin);
   if (q) url.searchParams.set("q", q);

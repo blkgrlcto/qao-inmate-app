@@ -50,6 +50,9 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       CORS_ORIGINS: '["http://localhost:3000","http://web:3000","http://127.0.0.1:3000"]'
+      # Unset by default -> mock AI mode. Set OPENAI_API_KEY in your shell/.env
+      # before `docker compose up` to switch the RAG pillar to real OpenAI calls.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

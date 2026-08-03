@@ -14,9 +14,12 @@ from app.core.deps import get_current_user, require_roles
 from app.models.case import Case, CaseStatus
 from app.models.deadline import Deadline
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
 from app.models.share import Share
 from app.models.user import User, UserRole
 from app.db.session import get_db
+from app.services.ai import embed_texts
+from app.services.chunking import chunk_text
 from app.services.pdf import extract_text_from_pdf
 from app.services.s3 import get_object_stream, upload_file
 
@@ -279,6 +282,22 @@ async def upload_document(
     )
     db.add(doc)
     await db.flush()
+
+    if content:
+        chunks = chunk_text(content)
+        if chunks:
+            embeddings, provider = await embed_texts(chunks)
+            for i, (chunk_content, embedding) in enumerate(zip(chunks, embeddings)):
+                db.add(
+                    DocumentChunk(
+                        document_id=doc.id,
+                        chunk_index=i,
+                        content=chunk_content,
+                        embedding=embedding,
+                        provider=provider,
+                    )
+                )
+            await db.flush()
 
     await log_audit(db, current_user.id, "document_upload", "document", str(doc.id))
 

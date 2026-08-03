@@ -3,6 +3,7 @@ from app.models.audit_log import AuditLog
 from app.models.case import Case
 from app.models.deadline import Deadline
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
 from app.models.federal_case_cache import FederalCaseCache
 from app.models.federal_case_search_log import FederalCaseSearchLog
 from app.models.opinion import Opinion
@@ -15,6 +16,7 @@ __all__ = [
     "Case",
     "Deadline",
     "Document",
+    "DocumentChunk",
     "FederalCaseCache",
     "FederalCaseSearchLog",
     "Opinion",

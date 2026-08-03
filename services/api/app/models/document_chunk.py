@@ -1,0 +1,36 @@
+"""Document chunk embeddings for grounded Q&A (RAG) over case documents."""
+import uuid
+from datetime import datetime
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+# Must match OpenAI text-embedding-3-small (and opinion_vector.py's EMBEDDING_DIM).
+EMBEDDING_DIM = 1536
+
+
+class DocumentChunk(Base):
+    """A chunk of extracted document text with its embedding."""
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    # "mock" or "openai" — which provider produced this embedding, for debugging.
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    document = relationship("Document", back_populates="chunks")

@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     FED_CASE_SYNC_STALE_DAYS: int = 7
     COURTLISTENER_RATE_LIMIT_RPS: float = 2.0
 
+    # AI / RAG (OpenAI). Presence of OPENAI_API_KEY is the mock-vs-real switch —
+    # unset (the default) means every AI call in app/services/ai uses mock mode.
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+
 
 @lru_cache
 def get_settings() -> Settings:
